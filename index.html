@@ -147,7 +147,7 @@
           const r = recentRSI[i];
           const rsiCell = r != null ? r.toFixed(2) : '-';
           return '<tr>' +
-            '<td>' + c.date + '</td>' +
+            '<td>' + escapeHtml(c.date) + '</td>' +
             '<td>' + c.open.toFixed(2) + '</td>' +
             '<td>' + c.high.toFixed(2) + '</td>' +
             '<td>' + c.low.toFixed(2) + '</td>' +
@@ -160,11 +160,11 @@
         resultEl.innerHTML =
           '<div class="card">' +
             '<div class="rsi-block">' +
-              '<div class="rsi-value ' + signalClass + '">' + rsiValue + '</div>' +
+              '<div class="rsi-value ' + escapeHtml(signalClass) + '">' + rsiValue + '</div>' +
               '<div>' +
                 '<div style="font-size:1.25rem;font-weight:600;">' + escapeHtml(symbol) + '</div>' +
-                (signal ? '<span class="signal ' + signalClass + '">' + signalLabel + '</span>' : '') +
-                '<div class="rsi-meta">RSI(14)' + (signalDate ? ' &middot; ' + signalDate : '') + '</div>' +
+                (signal ? '<span class="signal ' + escapeHtml(signalClass) + '">' + escapeHtml(signalLabel) + '</span>' : '') +
+                '<div class="rsi-meta">RSI(14)' + (signalDate ? ' &middot; ' + escapeHtml(signalDate) : '') + '</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
