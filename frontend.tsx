@@ -61,6 +61,7 @@ const DARK_OPTS = {
 
 export default function App() {
   const [ticker, setTicker] = useState("");
+  const [displayedTicker, setDisplayedTicker] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<StockPayload | null>(null);
@@ -112,10 +113,9 @@ export default function App() {
       color: "#7c4dff",
       lineWidth: 2,
       priceFormat: { type: "price", precision: 2, minMove: 0.01 },
-      // Pin y-axis to 0–100 regardless of data range
+      // Pin y-axis: value-space padding keeps 0 and 100 clearly visible
       autoscaleInfoProvider: () => ({
-        priceRange: { minValue: 0, maxValue: 100 },
-        margins: { above: 10, below: 10 },
+        priceRange: { minValue: -10, maxValue: 110 },
       }),
     });
     rsiLineSeries.current = rsl;
@@ -171,9 +171,19 @@ export default function App() {
 
     try {
       const res = await fetch(`/api/stock/${sym}`);
-      const json = await res.json() as Record<string, unknown>;
-      if (!res.ok) throw new Error((json["error"] as string) ?? "Request failed");
-      setData(json as unknown as StockPayload);
+      if (!res.ok) {
+        let message = "Request failed";
+        try {
+          const body = await res.json() as { error?: string };
+          message = body.error ?? message;
+        } catch {
+          message = (await res.text().catch(() => message)) || message;
+        }
+        throw new Error(message);
+      }
+      const json = await res.json() as StockPayload;
+      setData(json);
+      setDisplayedTicker(sym);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -246,7 +256,7 @@ export default function App() {
           {/* Price panel */}
           <div className="chart-panel">
             <div className="chart-panel-header">
-              <span className="chart-panel-title">Price — {ticker}</span>
+              <span className="chart-panel-title">Price — {displayedTicker}</span>
             </div>
             <div ref={priceRef} className="chart-host" style={{ height: 380 }} />
           </div>
