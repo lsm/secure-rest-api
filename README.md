@@ -60,19 +60,22 @@ The app will be available at <http://localhost:3000>.
 
 ```
 src/
-  index.ts          # Server entry point (Bun.serve + RSI API)
+  index.ts          # Server entry point (Bun.serve)
+  stock.ts          # Alpha Vantage client + RSI calculation
   auth/             # JWT authentication module
   db/               # In-memory database schema
   rate-limit/       # Sliding-window rate limiter
+public/
+  index.html        # Frontend (Chart.js price + RSI charts)
 tests/              # Unit tests
 .env.example        # Environment variable template
 ```
 
 ## API
 
-### `GET /api/rsi?symbol=<TICKER>`
+### `GET /api/stock/:symbol`
 
-Returns the last 100 data points for the given ticker.
+Returns the last 100 data points (with RSI) for the given ticker.
 
 **Response**
 
@@ -81,8 +84,8 @@ Returns the last 100 data points for the given ticker.
   "symbol": "AAPL",
   "dates": ["2024-10-01", "..."],
   "closes": [226.51, "..."],
-  "rsi": [null, "...", 62.4]
+  "rsi": [62.4, "..."]
 }
 ```
 
-RSI values are `null` for the first 14 data points (warm-up period).
+RSI is calculated using Wilder's 14-period smoothing on the server side.
