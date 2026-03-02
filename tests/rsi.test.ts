@@ -175,7 +175,9 @@ describe("calculateRSI – edge cases", () => {
     expect(() => calculateRSI([1, 2, 3], 1.5)).toThrow(RangeError);
   });
 
-  test("rsiSignal throws TypeError for NaN input", () => {
+  test("rsiSignal throws TypeError for non-finite input", () => {
     expect(() => rsiSignal(NaN)).toThrow(TypeError);
+    expect(() => rsiSignal(Infinity)).toThrow(TypeError);
+    expect(() => rsiSignal(-Infinity)).toThrow(TypeError);
   });
 });

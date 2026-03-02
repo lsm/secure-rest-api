@@ -79,7 +79,7 @@ function rsiFromAvgs(avgGain: number, avgLoss: number): number | null {
  * @returns "overbought" if ≥70, "oversold" if ≤30, otherwise "neutral"
  */
 export function rsiSignal(value: number): RSISignal {
-  if (typeof value !== "number" || isNaN(value)) {
+  if (!Number.isFinite(value)) {
     throw new TypeError(`rsiSignal expects a finite number, got ${value}`);
   }
   if (value >= 70) return "overbought";
