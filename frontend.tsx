@@ -103,7 +103,6 @@ export default function App() {
       height: 160,
       rightPriceScale: {
         ...DARK_OPTS.rightPriceScale,
-        autoScale: false,
         scaleMargins: { top: 0.05, bottom: 0.05 },
       },
     });
