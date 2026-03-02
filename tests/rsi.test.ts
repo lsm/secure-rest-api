@@ -160,12 +160,12 @@ describe("calculateRSI – edge cases", () => {
     expect(result[5]).not.toBeNull();
   });
 
-  test("constant prices (no change) returns null – undefined 0/0 case", () => {
-    // avgGain === 0 AND avgLoss === 0 → flat market, RSI is undefined → null
+  test("constant prices (no change) returns RSI = 50 – neutral zero-momentum case", () => {
+    // avgGain === 0 AND avgLoss === 0 → flat market, RSI is 50 (neutral)
     const prices = Array.from({ length: 16 }, () => 50);
     const result = calculateRSI(prices);
     for (let i = 14; i < 16; i++) {
-      expect(result[i]).toBeNull();
+      expect(result[i]).toBe(50);
     }
   });
 

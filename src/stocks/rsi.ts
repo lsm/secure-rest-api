@@ -66,7 +66,7 @@ export function calculateRSI(prices: number[], period = 14): (number | null)[] {
 }
 
 function rsiFromAvgs(avgGain: number, avgLoss: number): number | null {
-  if (avgGain === 0 && avgLoss === 0) return null; // flat market — undefined (0/0)
+  if (avgGain === 0 && avgLoss === 0) return 50;   // flat market — neutral (zero momentum)
   if (avgLoss === 0) return 100;                   // pure up-trend
   const rs = avgGain / avgLoss;
   return 100 - 100 / (1 + rs);
