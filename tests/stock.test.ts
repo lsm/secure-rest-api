@@ -1,6 +1,9 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
 import { fetchStockData, StockApiError } from '../src/stock.ts';
 
+// Capture the real fetch before any test can overwrite it
+const originalFetch = globalThis.fetch;
+
 // ---------------------------------------------------------------------------
 // computeRSI (tested indirectly via fetchStockData with mocked fetch)
 // ---------------------------------------------------------------------------
@@ -17,7 +20,7 @@ function makeTimeSeries(closes: number[]): Record<string, Record<string, string>
 }
 
 function mockFetchWith(timeSeries: Record<string, Record<string, string>>) {
-	global.fetch = mock(async () =>
+	globalThis.fetch = mock(async () =>
 		new Response(JSON.stringify({ 'Time Series (Daily)': timeSeries }), {
 			status: 200,
 			headers: { 'Content-Type': 'application/json' },
@@ -27,8 +30,8 @@ function mockFetchWith(timeSeries: Record<string, Record<string, string>>) {
 
 describe('fetchStockData – RSI correctness', () => {
 	beforeEach(() => {
-		// Reset mock before each test
-		global.fetch = fetch;
+		// Restore the real fetch captured before any mocking
+		globalThis.fetch = originalFetch;
 	});
 
 	test('normal prices produce RSI values between 0 and 100', async () => {
@@ -90,14 +93,14 @@ describe('fetchStockData – RSI correctness', () => {
 
 describe('fetchStockData – error handling', () => {
 	test('throws StockApiError on rate-limit Note', async () => {
-		global.fetch = mock(async () =>
+		globalThis.fetch = mock(async () =>
 			new Response(JSON.stringify({ Note: 'API call frequency limit reached.' }), { status: 200 }),
 		);
 		await expect(fetchStockData('AAPL', 'demo')).rejects.toBeInstanceOf(StockApiError);
 	});
 
 	test('throws StockApiError on Error Message (bad symbol)', async () => {
-		global.fetch = mock(async () =>
+		globalThis.fetch = mock(async () =>
 			new Response(JSON.stringify({ 'Error Message': 'Invalid API call.' }), { status: 200 }),
 		);
 		try {
@@ -109,25 +112,37 @@ describe('fetchStockData – error handling', () => {
 		}
 	});
 
-	test('throws StockApiError on Information (demo key)', async () => {
-		global.fetch = mock(async () =>
+	test('throws StockApiError on Information (demo key) with sanitized message', async () => {
+		globalThis.fetch = mock(async () =>
 			new Response(
 				JSON.stringify({ Information: 'The **demo** API key is for demo purposes only.' }),
 				{ status: 200 },
 			),
 		);
-		await expect(fetchStockData('TSLA', 'demo')).rejects.toBeInstanceOf(StockApiError);
+		try {
+			await fetchStockData('TSLA', 'demo');
+			expect(true).toBe(false);
+		} catch (e) {
+			expect(e).toBeInstanceOf(StockApiError);
+			if (e instanceof StockApiError) {
+				// Must NOT leak raw vendor text
+				expect(e.message).not.toContain('**demo**');
+				expect(e.message).not.toContain('alphavantage.co');
+				// Must be a human-friendly message
+				expect(e.message.length).toBeGreaterThan(0);
+			}
+		}
 	});
 
 	test('throws StockApiError on missing Time Series field', async () => {
-		global.fetch = mock(async () =>
+		globalThis.fetch = mock(async () =>
 			new Response(JSON.stringify({ 'Meta Data': {} }), { status: 200 }),
 		);
 		await expect(fetchStockData('AAPL', 'demo')).rejects.toBeInstanceOf(StockApiError);
 	});
 
 	test('throws StockApiError on HTTP error status', async () => {
-		global.fetch = mock(async () => new Response('', { status: 503 }));
+		globalThis.fetch = mock(async () => new Response('', { status: 503 }));
 		await expect(fetchStockData('AAPL', 'demo')).rejects.toBeInstanceOf(StockApiError);
 	});
 });

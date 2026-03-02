@@ -34,7 +34,7 @@ Bun.serve({
 			}
 
 			const symbol = (req as Request & { params?: Record<string, string> }).params?.symbol ?? '';
-			if (!symbol || !/^[A-Z0-9.^-]{1,12}$/i.test(symbol)) {
+			if (!symbol || !/^[A-Z]{1,5}([.-][A-Z0-9]{1,4})?$/i.test(symbol)) {
 				return Response.json({ error: 'Invalid symbol' }, { status: 400 });
 			}
 
@@ -49,7 +49,7 @@ Bun.serve({
 				return Response.json({ error: 'Internal server error' }, { status: 502 });
 			}
 		},
-		'/': () => new Response(Bun.file('./public/index.html')),
+		'/': () => new Response(Bun.file(import.meta.dir + '/../public/index.html')),
 	},
 });
 

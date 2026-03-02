@@ -61,7 +61,7 @@ export async function fetchStockData(symbol: string, apiKey: string): Promise<St
 
 	if (json['Note']) throw new StockApiError('Alpha Vantage rate limit reached. Please wait and retry.');
 	if (json['Error Message']) throw new StockApiError(`Invalid symbol: ${symbol}`, 404);
-	if (json['Information']) throw new StockApiError(json['Information'] as string);
+	if (json['Information']) throw new StockApiError('API rate limit or access restriction. Please check your API key and usage limits.');
 
 	const timeSeries = json['Time Series (Daily)'] as Record<string, Record<string, string>> | undefined;
 	if (!timeSeries) throw new StockApiError('Unexpected Alpha Vantage response format.');
