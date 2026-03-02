@@ -105,11 +105,15 @@ export function createAuthRateLimiter(overrides?: Partial<RateLimitMiddlewareOpt
  * 100 requests per 15 minutes per IP.
  */
 export function createApiRateLimiter(overrides?: Partial<RateLimitMiddlewareOptions>): MiddlewareHandler {
-	const limiter = overrides?.limiter ?? new RateLimiter({ windowMs: 15 * 60 * 1000, max: 100 });
+	// Resolve effective windowMs and max so the RateLimiter constructor
+	// honours any caller-supplied overrides (not just the middleware defaults).
+	const windowMs = overrides?.windowMs ?? 15 * 60 * 1000;
+	const max = overrides?.max ?? 100;
+	const limiter = overrides?.limiter ?? new RateLimiter({ windowMs, max });
 	limiter.startCleanup();
 	return createRateLimitMiddleware({
-		windowMs: 15 * 60 * 1000, // 15 minutes
-		max: 100,
+		windowMs,
+		max,
 		message: 'Too many requests, please try again later.',
 		...overrides,
 		limiter,

@@ -153,14 +153,16 @@ describe('GET /api/stocks/:symbol/rsi', () => {
 		app = createApp(mockService);
 	});
 
-	test('returns 200 with rsi value and signal', async () => {
+	test('returns 200 with rsi value, signal, and date', async () => {
 		const res = await app.request('/api/stocks/AAPL/rsi');
 		expect(res.status).toBe(200);
 
-		const body = await res.json() as { symbol: string; rsi: number; signal: string };
+		const body = await res.json() as { symbol: string; date: string; rsi: number; signal: string };
 		expect(body.symbol).toBe('AAPL');
 		expect(typeof body.rsi).toBe('number');
 		expect(['oversold', 'neutral', 'overbought']).toContain(body.signal);
+		// date field must be present (corresponds to the candle date of latest RSI)
+		expect(typeof body.date).toBe('string');
 	});
 
 	test('signal reflects getRsiSignal result', async () => {

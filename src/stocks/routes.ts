@@ -7,21 +7,28 @@ import type { StockService } from './service.ts';
  *
  * Routes:
  *   GET /:symbol       — 90-day OHLCV candles + aligned RSI array
- *   GET /:symbol/rsi   — latest RSI value and signal
+ *   GET /:symbol/rsi   — latest RSI value, signal, and date
  */
 export function createStocksRouter(stockService: StockService): Hono {
 	const router = new Hono();
 
+	// Apply Cache-Control to all responses (including error paths)
+	router.use('/*', async (c, next) => {
+		c.header('Cache-Control', 'no-store');
+		await next();
+	});
+
 	router.get('/:symbol', async (c) => {
 		const symbol = c.req.param('symbol').toUpperCase();
 
-		if (!/^[A-Z0-9.]{1,10}$/i.test(symbol)) {
+		// Symbol already uppercased — no /i flag needed
+		if (!/^[A-Z0-9.]{1,10}$/.test(symbol)) {
 			return c.json({ error: 'Invalid symbol' }, 400);
 		}
 
 		let rawCandles;
 		try {
-			// Fetch extra candles for RSI warmup (14 extra for period=14)
+			// Fetch 104 candles (90 desired + 14 RSI warmup) using full outputsize
 			rawCandles = await stockService.getCandles(symbol, 104);
 		} catch (error) {
 			console.error('StockService error:', error);
@@ -30,25 +37,24 @@ export function createStocksRouter(stockService: StockService): Hono {
 
 		const rsiAll = stockService.calculateRsi(rawCandles);
 
-		// Slice to the last 90 entries that have a valid (non-null) RSI value
+		// Strip leading null-warmup entries so candles and rsi arrays are 1-to-1
 		const firstValid = rsiAll.findIndex((v) => v !== null);
 		const candles = firstValid === -1 ? rawCandles : rawCandles.slice(firstValid);
 		const rsi = firstValid === -1 ? rsiAll : rsiAll.slice(firstValid);
 
-		c.header('Cache-Control', 'no-store');
 		return c.json({ symbol, candles: candles.slice(-90), rsi: rsi.slice(-90) });
 	});
 
 	router.get('/:symbol/rsi', async (c) => {
 		const symbol = c.req.param('symbol').toUpperCase();
 
-		if (!/^[A-Z0-9.]{1,10}$/i.test(symbol)) {
+		if (!/^[A-Z0-9.]{1,10}$/.test(symbol)) {
 			return c.json({ error: 'Invalid symbol' }, 400);
 		}
 
 		let candles;
 		try {
-			// Fetch extra candles for RSI warmup (14 extra for period=14)
+			// Fetch 104 candles (90 desired + 14 RSI warmup) using full outputsize
 			candles = await stockService.getCandles(symbol, 104);
 		} catch (error) {
 			console.error('StockService error:', error);
@@ -57,11 +63,13 @@ export function createStocksRouter(stockService: StockService): Hono {
 
 		const rsiValues = stockService.calculateRsi(candles);
 
-		// Find the latest non-null RSI value
+		// Find the latest non-null RSI value and its corresponding candle date
 		let latestRsi: number | null = null;
+		let latestDate = '';
 		for (let i = rsiValues.length - 1; i >= 0; i--) {
 			if (rsiValues[i] !== null) {
 				latestRsi = rsiValues[i] as number;
+				latestDate = candles[i]?.date ?? '';
 				break;
 			}
 		}
@@ -71,8 +79,7 @@ export function createStocksRouter(stockService: StockService): Hono {
 		}
 
 		const signal = stockService.getRsiSignal(latestRsi);
-		c.header('Cache-Control', 'no-store');
-		return c.json({ symbol, rsi: latestRsi, signal });
+		return c.json({ symbol, date: latestDate, rsi: latestRsi, signal });
 	});
 
 	return router;

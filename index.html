@@ -136,7 +136,7 @@
 
         const rows = recentCandles.map((c, i) => {
           const r = recentRSI[i];
-          const rsiCell = r != null ? r.rsi.toFixed(2) : '-';
+          const rsiCell = r != null ? r.toFixed(2) : '-';
           return '<tr>' +
             '<td>' + c.date + '</td>' +
             '<td>' + c.open.toFixed(2) + '</td>' +

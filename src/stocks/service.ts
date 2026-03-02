@@ -15,7 +15,8 @@ export class StockService {
 		const url = new URL(ALPHA_VANTAGE_BASE);
 		url.searchParams.set('function', 'TIME_SERIES_DAILY');
 		url.searchParams.set('symbol', symbol);
-		url.searchParams.set('outputsize', 'compact');
+		// Use 'full' when requesting more than compact's ~100-row cap
+		url.searchParams.set('outputsize', days > 100 ? 'full' : 'compact');
 		url.searchParams.set('apikey', this.apiKey);
 
 		const res = await fetch(url.toString(), {
