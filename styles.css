@@ -1,0 +1,252 @@
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-base: #0f0f1a;
+  --bg-panel: #1a1a2e;
+  --bg-panel-alt: #16213e;
+  --border: #2a2a4e;
+  --accent: #7c4dff;
+  --accent-hover: #6a3de8;
+  --text-primary: #e0e0f0;
+  --text-secondary: #8888aa;
+  --red: #ef5350;
+  --green: #26a69a;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Layout ─────────────────────────────────────────── */
+
+.app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+/* ── Header / Search ─────────────────────────────────── */
+
+.header {
+  margin-bottom: 28px;
+}
+
+.header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.search-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: 380px;
+  padding: 10px 16px;
+  background-color: var(--bg-panel);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  transition: border-color 0.2s, outline-color 0.2s;
+}
+
+.search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.search-input:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.search-button {
+  padding: 10px 28px;
+  background-color: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+  white-space: nowrap;
+}
+
+.search-button:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+}
+
+.search-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Status messages ─────────────────────────────────── */
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error-box {
+  padding: 14px 18px;
+  background-color: rgba(239, 83, 80, 0.1);
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  color: #ff8a80;
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+}
+
+/* ── RSI Badge ───────────────────────────────────────── */
+
+.rsi-badge-row {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rsi-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.rsi-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1.5px solid transparent;
+}
+
+.rsi-overbought {
+  background-color: rgba(239, 83, 80, 0.12);
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.rsi-oversold {
+  background-color: rgba(38, 166, 154, 0.12);
+  color: var(--green);
+  border-color: var(--green);
+}
+
+.rsi-neutral {
+  background-color: rgba(120, 120, 170, 0.12);
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+/* ── Charts ──────────────────────────────────────────── */
+
+.charts-wrapper {
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.chart-panel {
+  background-color: var(--bg-panel);
+  position: relative;
+}
+
+.chart-panel + .chart-panel {
+  border-top: 1px solid var(--border);
+}
+
+.chart-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--bg-panel-alt);
+}
+
+.chart-panel-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.chart-host {
+  width: 100%;
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .app {
+    padding: 16px 12px;
+  }
+
+  .header h1 {
+    font-size: 1.25rem;
+  }
+
+  .search-bar {
+    flex-direction: column;
+  }
+
+  .search-input {
+    max-width: 100%;
+  }
+
+  .search-button {
+    width: 100%;
+  }
+}
