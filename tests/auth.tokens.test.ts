@@ -135,9 +135,9 @@ describe('getRefreshTokenExpiryDate', () => {
 		const expiry = getRefreshTokenExpiryDate();
 		const diffMs = expiry.getTime() - now.getTime();
 		const diffDays = diffMs / (1000 * 60 * 60 * 24);
-		// Should be between 6.99 and 7.01 days
-		expect(diffDays).toBeGreaterThan(6.99);
-		expect(diffDays).toBeLessThan(7.01);
+		// Should be approximately 7 days (allowing for DST offsets and setDate() precision)
+		expect(diffDays).toBeGreaterThan(6.9);
+		expect(diffDays).toBeLessThan(7.1);
 	});
 
 	test('returns a future date', () => {

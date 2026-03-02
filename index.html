@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock RSI Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+      background: #f8f9fa;
+      color: #212529;
+    }
+    h1 { margin: 0 0 1.5rem; font-size: 1.75rem; }
+    .search {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    input {
+      flex: 1;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid #ced4da;
+      border-radius: 6px;
+      font-size: 1rem;
+      text-transform: uppercase;
+    }
+    button {
+      padding: 0.6rem 1.25rem;
+      background: #0d6efd;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    button:hover { background: #0b5ed7; }
+    button:disabled { background: #6c757d; cursor: not-allowed; }
+    .card {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .rsi-block { display: flex; align-items: center; gap: 1rem; }
+    .rsi-value { font-size: 3rem; font-weight: 700; line-height: 1; }
+    .rsi-meta { font-size: 0.95rem; color: #6c757d; }
+    .signal {
+      display: inline-block;
+      padding: 0.2rem 0.75rem;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .overbought { color: #dc3545; }
+    .oversold { color: #198754; }
+    .neutral { color: #fd7e14; }
+    .signal.overbought { background: #f8d7da; }
+    .signal.oversold { background: #d1e7dd; }
+    .signal.neutral { background: #ffe5d0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    th, td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #dee2e6;
+      text-align: right;
+    }
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+      text-align: right;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    tr:last-child td { border-bottom: none; }
+    .error { color: #dc3545; padding: 0.75rem; background: #f8d7da; border-radius: 6px; }
+    .loading { color: #6c757d; font-style: italic; }
+    #result { min-height: 60px; }
+  </style>
+</head>
+<body>
+  <h1>Stock RSI Dashboard</h1>
+  <div class="search">
+    <input type="text" id="symbol" placeholder="Enter symbol (e.g. AAPL)" value="AAPL" maxlength="10">
+    <button id="loadBtn" onclick="loadStock()">Load</button>
+  </div>
+  <div id="result"></div>
+
+  <script>
+    const resultEl = document.getElementById('result');
+    const loadBtn = document.getElementById('loadBtn');
+    const symbolInput = document.getElementById('symbol');
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    symbolInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loadStock();
+    });
+
+    async function loadStock() {
+      const raw = symbolInput.value.trim();
+      if (!raw) return;
+      const symbol = raw.toUpperCase();
+
+      loadBtn.disabled = true;
+      resultEl.innerHTML = '<p class="loading">Loading ' + escapeHtml(symbol) + '...</p>';
+
+      try {
+        const [stockRes, rsiRes] = await Promise.all([
+          fetch('/api/stocks/' + symbol),
+          fetch('/api/stocks/' + symbol + '/rsi'),
+        ]);
+
+        if (!stockRes.ok) {
+          const err = await stockRes.json().catch(() => ({ error: stockRes.statusText }));
+          resultEl.innerHTML = '<p class="error">Error: ' + escapeHtml(err.error || stockRes.statusText) + '</p>';
+          return;
+        }
+
+        const stock = await stockRes.json();
+        const signal = rsiRes.ok ? await rsiRes.json() : null;
+
+        const signalClass = signal ? signal.signal : 'neutral';
+        const rsiValue = signal ? signal.rsi.toFixed(2) : 'N/A';
+        const signalLabel = signal ? signal.signal : '';
+        const signalDate = signal ? signal.date : '';
+
+        const recentCandles = stock.candles.slice(-20);
+        const recentRSI = stock.rsi.slice(-20);
+
+        const rows = recentCandles.map((c, i) => {
+          const r = recentRSI[i];
+          const rsiCell = r != null ? r.toFixed(2) : '-';
+          return '<tr>' +
+            '<td>' + escapeHtml(c.date) + '</td>' +
+            '<td>' + c.open.toFixed(2) + '</td>' +
+            '<td>' + c.high.toFixed(2) + '</td>' +
+            '<td>' + c.low.toFixed(2) + '</td>' +
+            '<td>' + c.close.toFixed(2) + '</td>' +
+            '<td>' + c.volume.toLocaleString() + '</td>' +
+            '<td>' + rsiCell + '</td>' +
+            '</tr>';
+        }).join('');
+
+        resultEl.innerHTML =
+          '<div class="card">' +
+            '<div class="rsi-block">' +
+              '<div class="rsi-value ' + escapeHtml(signalClass) + '">' + rsiValue + '</div>' +
+              '<div>' +
+                '<div style="font-size:1.25rem;font-weight:600;">' + escapeHtml(symbol) + '</div>' +
+                (signal ? '<span class="signal ' + escapeHtml(signalClass) + '">' + escapeHtml(signalLabel) + '</span>' : '') +
+                '<div class="rsi-meta">RSI(14)' + (signalDate ? ' &middot; ' + escapeHtml(signalDate) : '') + '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="card">' +
+            '<h3 style="margin:0 0 0.75rem">Recent 20 Sessions</h3>' +
+            '<table>' +
+              '<thead><tr>' +
+                '<th>Date</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th><th>RSI</th>' +
+              '</tr></thead>' +
+              '<tbody>' + rows + '</tbody>' +
+            '</table>' +
+          '</div>';
+      } catch (err) {
+        resultEl.innerHTML = '<p class="error">Error: ' + escapeHtml(err.message) + '</p>';
+      } finally {
+        loadBtn.disabled = false;
+      }
+    }
+
+    loadStock();
+  </script>
+</body>
+</html>
