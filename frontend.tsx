@@ -171,9 +171,9 @@ export default function App() {
 
     try {
       const res = await fetch(`/api/stock/${sym}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Request failed");
-      setData(json as StockPayload);
+      const json = await res.json() as Record<string, unknown>;
+      if (!res.ok) throw new Error((json["error"] as string) ?? "Request failed");
+      setData(json as unknown as StockPayload);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
