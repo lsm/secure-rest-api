@@ -85,9 +85,7 @@ export function generateRefreshToken(): string {
 }
 
 export function getRefreshTokenExpiryDate(): Date {
-	const date = new Date();
-	date.setDate(date.getDate() + 7);
-	return date;
+	return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 }
 
 export const ACCESS_TOKEN_EXPIRY_SECS = ACCESS_TOKEN_EXPIRY_SECONDS;
