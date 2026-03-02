@@ -5,8 +5,8 @@ A web app that fetches stock price history from [Alpha Vantage](https://www.alph
 ## Features
 
 - Search any ticker symbol (e.g. AAPL, TSLA, MSFT)
-- Displays the last 100 daily closing prices as a line chart
-- Calculates and charts the 14-period RSI using Wilder smoothing
+- Displays up to ~100 daily closing prices as a line chart
+- Calculates and charts 14-period RSI using Wilder smoothing for the available window
 - Visual overbought (>70) and oversold (<30) zones on the RSI chart
 
 ## Getting Started
@@ -75,7 +75,7 @@ tests/              # Unit tests
 
 ### `GET /api/stock/:symbol`
 
-Returns the last 100 data points (with RSI) for the given ticker.
+Returns up to ~86 data points (closes + RSI) for the given ticker. The `compact` output from Alpha Vantage provides ~100 closes; after the 14-period RSI warm-up, ~86 matched points are returned.
 
 **Response**
 

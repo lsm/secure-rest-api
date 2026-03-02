@@ -31,8 +31,14 @@ function computeRSI(closes: number[], period = 14): number[] {
 	avgLoss /= period;
 
 	const rsi: number[] = [];
-	const firstRS = avgLoss === 0 ? Infinity : avgGain / avgLoss;
-	rsi.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + firstRS));
+
+	function rsiFromAvgs(g: number, l: number): number {
+		if (g === 0 && l === 0) return 50;
+		if (l === 0) return 100;
+		return 100 - 100 / (1 + g / l);
+	}
+
+	rsi.push(rsiFromAvgs(avgGain, avgLoss));
 
 	for (let i = period + 1; i < closes.length; i++) {
 		const change = (closes[i] ?? 0) - (closes[i - 1] ?? 0);
@@ -40,16 +46,15 @@ function computeRSI(closes: number[], period = 14): number[] {
 		const loss = change < 0 ? Math.abs(change) : 0;
 		avgGain = (avgGain * (period - 1) + gain) / period;
 		avgLoss = (avgLoss * (period - 1) + loss) / period;
-		const rs = avgLoss === 0 ? Infinity : avgGain / avgLoss;
-		rsi.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + rs));
+		rsi.push(rsiFromAvgs(avgGain, avgLoss));
 	}
 
 	return rsi;
 }
 
 export async function fetchStockData(symbol: string, apiKey: string): Promise<StockData> {
-	const url = `${BASE_URL}?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${apiKey}`;
-	const res = await fetch(url);
+	const url = `${BASE_URL}?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${encodeURIComponent(apiKey)}`;
+	const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
 	if (!res.ok) throw new StockApiError(`Alpha Vantage HTTP ${res.status}`);
 
 	const json = (await res.json()) as Record<string, unknown>;
