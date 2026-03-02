@@ -113,11 +113,13 @@ export default function App() {
       color: "#7c4dff",
       lineWidth: 2,
       priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+      // Pin y-axis to 0–100 regardless of data range
+      autoscaleInfoProvider: () => ({
+        priceRange: { minValue: 0, maxValue: 100 },
+        margins: { above: 10, below: 10 },
+      }),
     });
     rsiLineSeries.current = rsl;
-
-    // Fix RSI y-axis range 0–100
-    rc.priceScale("right").applyOptions({ autoScale: false });
 
     // Overbought reference line at 70 (dashed red)
     rsl.createPriceLine({
@@ -156,10 +158,6 @@ export default function App() {
     priceChart.current?.timeScale().fitContent();
     rsiChart.current?.timeScale().fitContent();
 
-    // Lock RSI y-axis after data is set
-    rsiChart.current?.priceScale("right").applyOptions({
-      autoScale: false,
-    });
   }, [data]);
 
   // ── Fetch handler ──────────────────────────────────────
@@ -251,7 +249,7 @@ export default function App() {
             <div className="chart-panel-header">
               <span className="chart-panel-title">Price — {ticker}</span>
             </div>
-            <div ref={priceRef} className="chart-host" />
+            <div ref={priceRef} className="chart-host" style={{ height: 380 }} />
           </div>
 
           {/* RSI panel */}
@@ -259,7 +257,7 @@ export default function App() {
             <div className="chart-panel-header">
               <span className="chart-panel-title">RSI (14)</span>
             </div>
-            <div ref={rsiRef} className="chart-host" />
+            <div ref={rsiRef} className="chart-host" style={{ height: 160 }} />
           </div>
         </div>
       </main>
