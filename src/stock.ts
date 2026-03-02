@@ -17,48 +17,59 @@ export class StockApiError extends Error {
 	}
 }
 
+function computeRSI(closes: number[], period = 14): number[] {
+	if (closes.length <= period) return [];
+
+	let avgGain = 0;
+	let avgLoss = 0;
+	for (let i = 1; i <= period; i++) {
+		const change = (closes[i] ?? 0) - (closes[i - 1] ?? 0);
+		if (change > 0) avgGain += change;
+		else avgLoss += Math.abs(change);
+	}
+	avgGain /= period;
+	avgLoss /= period;
+
+	const rsi: number[] = [];
+	const firstRS = avgLoss === 0 ? Infinity : avgGain / avgLoss;
+	rsi.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + firstRS));
+
+	for (let i = period + 1; i < closes.length; i++) {
+		const change = (closes[i] ?? 0) - (closes[i - 1] ?? 0);
+		const gain = change > 0 ? change : 0;
+		const loss = change < 0 ? Math.abs(change) : 0;
+		avgGain = (avgGain * (period - 1) + gain) / period;
+		avgLoss = (avgLoss * (period - 1) + loss) / period;
+		const rs = avgLoss === 0 ? Infinity : avgGain / avgLoss;
+		rsi.push(avgLoss === 0 ? 100 : 100 - 100 / (1 + rs));
+	}
+
+	return rsi;
+}
+
 export async function fetchStockData(symbol: string, apiKey: string): Promise<StockData> {
-	const [priceRes, rsiRes] = await Promise.all([
-		fetch(
-			`${BASE_URL}?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${apiKey}`,
-		),
-		fetch(
-			`${BASE_URL}?function=RSI&symbol=${encodeURIComponent(symbol)}&interval=daily&time_period=14&series_type=close&apikey=${apiKey}`,
-		),
-	]);
+	const url = `${BASE_URL}?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${apiKey}`;
+	const res = await fetch(url);
+	if (!res.ok) throw new StockApiError(`Alpha Vantage HTTP ${res.status}`);
 
-	const [priceJson, rsiJson] = await Promise.all([
-		priceRes.json() as Promise<Record<string, unknown>>,
-		rsiRes.json() as Promise<Record<string, unknown>>,
-	]);
+	const json = (await res.json()) as Record<string, unknown>;
 
-	const timeSeries = priceJson['Time Series (Daily)'] as Record<string, Record<string, string>> | undefined;
-	if (!timeSeries) {
-		const info =
-			(priceJson['Information'] as string | undefined) ??
-			(priceJson['Note'] as string | undefined) ??
-			JSON.stringify(priceJson);
-		throw new StockApiError(`Alpha Vantage price error: ${info}`);
-	}
+	if (json['Note']) throw new StockApiError('Alpha Vantage rate limit reached. Please wait and retry.');
+	if (json['Error Message']) throw new StockApiError(`Invalid symbol: ${symbol}`, 404);
+	if (json['Information']) throw new StockApiError(json['Information'] as string);
 
-	const rsiSeries = rsiJson['Technical Analysis: RSI'] as Record<string, Record<string, string>> | undefined;
-	if (!rsiSeries) {
-		const info =
-			(rsiJson['Information'] as string | undefined) ??
-			(rsiJson['Note'] as string | undefined) ??
-			JSON.stringify(rsiJson);
-		throw new StockApiError(`Alpha Vantage RSI error: ${info}`);
-	}
+	const timeSeries = json['Time Series (Daily)'] as Record<string, Record<string, string>> | undefined;
+	if (!timeSeries) throw new StockApiError('Unexpected Alpha Vantage response format.');
 
-	const priceDates = Object.keys(timeSeries).sort().reverse().slice(0, 100);
-	const rsiDateSet = new Set(Object.keys(rsiSeries));
-	const commonDates = priceDates.filter((d) => rsiDateSet.has(d)).slice(0, 90);
-	commonDates.sort();
+	const entries = Object.entries(timeSeries).sort(([a], [b]) => a.localeCompare(b));
+	const allDates = entries.map(([d]) => d);
+	const allCloses = entries.map(([, v]) => parseFloat(v['4. close'] ?? '0'));
 
-	return {
-		symbol: symbol.toUpperCase(),
-		dates: commonDates,
-		closes: commonDates.map((d) => parseFloat(timeSeries[d]!['4. close']!)),
-		rsi: commonDates.map((d) => parseFloat(rsiSeries[d]!['RSI']!)),
-	};
+	const rsiValues = computeRSI(allCloses);
+	const offset = allCloses.length - rsiValues.length;
+	const dates = allDates.slice(offset).slice(-100);
+	const closes = allCloses.slice(offset).slice(-100);
+	const rsi = rsiValues.slice(-100);
+
+	return { symbol: symbol.toUpperCase(), dates, closes, rsi };
 }
