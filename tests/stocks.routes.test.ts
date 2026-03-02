@@ -56,13 +56,30 @@ describe('GET /api/stocks/:symbol', () => {
 		expect(body.symbol).toBe('AAPL');
 		expect(Array.isArray(body.candles)).toBe(true);
 		expect(Array.isArray(body.rsi)).toBe(true);
-		expect((body.candles as Candle[]).length).toBe(MOCK_CANDLES.length);
-		expect((body.rsi as unknown[]).length).toBe(MOCK_RSI.length);
+		// Route strips null-warmup entries and slices to last 90; MOCK_RSI has 14
+		// nulls then 16 values → 16 non-null entries (< 90 so all are returned)
+		const expectedLen = MOCK_RSI.filter((v) => v !== null).length;
+		expect((body.candles as Candle[]).length).toBe(expectedLen);
+		expect((body.rsi as unknown[]).length).toBe(expectedLen);
 	});
 
 	test('uppercases the symbol', async () => {
 		await app.request('/api/stocks/aapl');
-		expect(mockService.getCandles).toHaveBeenCalledWith('AAPL');
+		expect(mockService.getCandles).toHaveBeenCalledWith('AAPL', 104);
+	});
+
+	test('returns 400 for invalid symbol', async () => {
+		const res = await app.request('/api/stocks/$INVALID!!');
+		expect(res.status).toBe(400);
+		const body = await res.json() as { error: string };
+		expect(body.error).toBe('Invalid symbol');
+	});
+
+	test('returns 400 for symbol with spaces', async () => {
+		const res = await app.request('/api/stocks/AA%20PL');
+		expect(res.status).toBe(400);
+		const body = await res.json() as { error: string };
+		expect(body.error).toBe('Invalid symbol');
 	});
 
 	test('candles contain required OHLCV fields', async () => {
@@ -96,8 +113,9 @@ describe('GET /api/stocks/:symbol', () => {
 		const res = await failApp.request('/api/stocks/BADKEY');
 		expect(res.status).toBe(502);
 
+		// Upstream errors are not leaked to the client
 		const body = await res.json() as { error: string };
-		expect(body.error).toContain('API key invalid');
+		expect(body.error).toBe('Failed to fetch stock data');
 	});
 
 	test('returns 429 after exceeding rate limit', async () => {
@@ -167,6 +185,13 @@ describe('GET /api/stocks/:symbol/rsi', () => {
 		const res = await app.request('/api/stocks/AAPL/rsi');
 		expect(res.headers.get('X-RateLimit-Limit')).toBe('100');
 		expect(res.headers.get('X-RateLimit-Remaining')).not.toBeNull();
+	});
+
+	test('returns 400 for invalid symbol', async () => {
+		const res = await app.request('/api/stocks/$BAD!!/rsi');
+		expect(res.status).toBe(400);
+		const body = await res.json() as { error: string };
+		expect(body.error).toBe('Invalid symbol');
 	});
 
 	test('returns 422 when all RSI values are null', async () => {

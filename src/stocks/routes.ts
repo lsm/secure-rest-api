@@ -15,27 +15,44 @@ export function createStocksRouter(stockService: StockService): Hono {
 	router.get('/:symbol', async (c) => {
 		const symbol = c.req.param('symbol').toUpperCase();
 
-		let candles;
-		try {
-			candles = await stockService.getCandles(symbol);
-		} catch (err) {
-			const message = err instanceof Error ? err.message : 'Failed to fetch stock data';
-			return c.json({ error: message }, 502);
+		if (!/^[A-Z0-9.]{1,10}$/i.test(symbol)) {
+			return c.json({ error: 'Invalid symbol' }, 400);
 		}
 
-		const rsi = stockService.calculateRsi(candles);
-		return c.json({ symbol, candles, rsi });
+		let rawCandles;
+		try {
+			// Fetch extra candles for RSI warmup (14 extra for period=14)
+			rawCandles = await stockService.getCandles(symbol, 104);
+		} catch (error) {
+			console.error('StockService error:', error);
+			return c.json({ error: 'Failed to fetch stock data' }, 502);
+		}
+
+		const rsiAll = stockService.calculateRsi(rawCandles);
+
+		// Slice to the last 90 entries that have a valid (non-null) RSI value
+		const firstValid = rsiAll.findIndex((v) => v !== null);
+		const candles = firstValid === -1 ? rawCandles : rawCandles.slice(firstValid);
+		const rsi = firstValid === -1 ? rsiAll : rsiAll.slice(firstValid);
+
+		c.header('Cache-Control', 'no-store');
+		return c.json({ symbol, candles: candles.slice(-90), rsi: rsi.slice(-90) });
 	});
 
 	router.get('/:symbol/rsi', async (c) => {
 		const symbol = c.req.param('symbol').toUpperCase();
 
+		if (!/^[A-Z0-9.]{1,10}$/i.test(symbol)) {
+			return c.json({ error: 'Invalid symbol' }, 400);
+		}
+
 		let candles;
 		try {
-			candles = await stockService.getCandles(symbol);
-		} catch (err) {
-			const message = err instanceof Error ? err.message : 'Failed to fetch stock data';
-			return c.json({ error: message }, 502);
+			// Fetch extra candles for RSI warmup (14 extra for period=14)
+			candles = await stockService.getCandles(symbol, 104);
+		} catch (error) {
+			console.error('StockService error:', error);
+			return c.json({ error: 'Failed to fetch stock data' }, 502);
 		}
 
 		const rsiValues = stockService.calculateRsi(candles);
@@ -54,6 +71,7 @@ export function createStocksRouter(stockService: StockService): Hono {
 		}
 
 		const signal = stockService.getRsiSignal(latestRsi);
+		c.header('Cache-Control', 'no-store');
 		return c.json({ symbol, rsi: latestRsi, signal });
 	});
 

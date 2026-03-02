@@ -1,13 +1,14 @@
 import { createApp } from './app.ts';
 import { StockService } from './stocks/service.ts';
 
-const apiKey = process.env.ALPHA_VANTAGE_API_KEY ?? '';
+const apiKey = Bun.env.ALPHA_VANTAGE_API_KEY;
+if (!apiKey) throw new Error('ALPHA_VANTAGE_API_KEY is required');
 
 const stockService = new StockService(apiKey);
 const app = createApp(stockService);
 
 const server = Bun.serve({
-	port: 3000,
+	port: Number(Bun.env.PORT ?? 3000),
 	fetch: app.fetch,
 });
 
