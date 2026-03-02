@@ -36,6 +36,11 @@ function mockFetch(body: unknown, status = 200): typeof globalThis.fetch {
 		});
 }
 
+/** Create a service with an injected fetch and a 0 ms cleanup interval (no background timer). */
+function makeService(fetch: typeof globalThis.fetch) {
+	return new StockService({ apiKey: 'key', fetch, cleanupIntervalMs: 0 });
+}
+
 const TEST_DATES = ['2024-01-02', '2024-01-03', '2024-01-04', '2024-01-05'];
 
 // ---------------------------------------------------------------------------
@@ -55,26 +60,26 @@ describe('StockService constructor', () => {
 
 	test('throws StockError MISSING_API_KEY when no key is available', () => {
 		delete process.env['ALPHAVANTAGE_API_KEY'];
+		let caught: unknown;
 		try {
-			new StockService();
-			expect(true).toBe(false); // unreachable
+			new StockService({ cleanupIntervalMs: 0 });
 		} catch (e) {
-			expect(e).toBeInstanceOf(StockError);
-			if (e instanceof StockError) {
-				expect(e.code).toBe('MISSING_API_KEY');
-				expect(e.statusCode).toBe(500);
-			}
+			caught = e;
 		}
+		expect(caught).toBeInstanceOf(StockError);
+		expect((caught as StockError).code).toBe('MISSING_API_KEY');
+		expect((caught as StockError).statusCode).toBe(500);
 	});
 
 	test('constructs successfully when apiKey is passed in config', () => {
 		delete process.env['ALPHAVANTAGE_API_KEY'];
-		expect(() => new StockService({ apiKey: 'test-key' })).not.toThrow();
+		expect(() => new StockService({ apiKey: 'test-key', cleanupIntervalMs: 0 })).not.toThrow();
 	});
 
 	test('constructs successfully when key is in ALPHAVANTAGE_API_KEY env var', () => {
 		process.env['ALPHAVANTAGE_API_KEY'] = 'env-key';
-		expect(() => new StockService()).not.toThrow();
+		const svc = new StockService({ cleanupIntervalMs: 0 });
+		svc.stopCleanup();
 	});
 });
 
@@ -86,10 +91,7 @@ describe('StockService.getDailyCandles – happy path', () => {
 	test('returns candles sorted by date ascending', async () => {
 		// Alpha Vantage returns dates newest-first; service must sort ascending
 		const reversedDates = [...TEST_DATES].reverse();
-		const service = new StockService({
-			apiKey: 'key',
-			fetch: mockFetch(buildDailyResponse('AAPL', reversedDates)),
-		});
+		const service = makeService(mockFetch(buildDailyResponse('AAPL', reversedDates)));
 
 		const candles = await service.getDailyCandles('AAPL');
 		expect(candles.length).toBe(4);
@@ -99,10 +101,7 @@ describe('StockService.getDailyCandles – happy path', () => {
 	});
 
 	test('returns correctly typed OHLCV numbers', async () => {
-		const service = new StockService({
-			apiKey: 'key',
-			fetch: mockFetch(buildDailyResponse('AAPL', ['2024-01-02'])),
-		});
+		const service = makeService(mockFetch(buildDailyResponse('AAPL', ['2024-01-02'])));
 
 		const [candle] = await service.getDailyCandles('AAPL');
 		expect(candle).toBeDefined();
@@ -129,15 +128,12 @@ describe('StockService.getDailyCandles – happy path', () => {
 			});
 		};
 
-		await new StockService({ apiKey: 'key', fetch: captureFetch }).getDailyCandles('aapl');
+		await new StockService({ apiKey: 'key', fetch: captureFetch, cleanupIntervalMs: 0 }).getDailyCandles('aapl');
 		expect(capturedUrl).toContain('symbol=AAPL');
 	});
 
 	test('filters candles by startDate (inclusive)', async () => {
-		const service = new StockService({
-			apiKey: 'key',
-			fetch: mockFetch(buildDailyResponse('AAPL', TEST_DATES)),
-		});
+		const service = makeService(mockFetch(buildDailyResponse('AAPL', TEST_DATES)));
 
 		const candles = await service.getDailyCandles('AAPL', { startDate: '2024-01-03' });
 		expect(candles.length).toBe(3);
@@ -145,10 +141,7 @@ describe('StockService.getDailyCandles – happy path', () => {
 	});
 
 	test('filters candles by endDate (inclusive)', async () => {
-		const service = new StockService({
-			apiKey: 'key',
-			fetch: mockFetch(buildDailyResponse('AAPL', TEST_DATES)),
-		});
+		const service = makeService(mockFetch(buildDailyResponse('AAPL', TEST_DATES)));
 
 		const candles = await service.getDailyCandles('AAPL', { endDate: '2024-01-03' });
 		expect(candles.length).toBe(2);
@@ -156,10 +149,7 @@ describe('StockService.getDailyCandles – happy path', () => {
 	});
 
 	test('filters candles by both startDate and endDate', async () => {
-		const service = new StockService({
-			apiKey: 'key',
-			fetch: mockFetch(buildDailyResponse('AAPL', TEST_DATES)),
-		});
+		const service = makeService(mockFetch(buildDailyResponse('AAPL', TEST_DATES)));
 
 		const candles = await service.getDailyCandles('AAPL', {
 			startDate: '2024-01-03',
@@ -172,7 +162,7 @@ describe('StockService.getDailyCandles – happy path', () => {
 });
 
 // ---------------------------------------------------------------------------
-// getDailyCandles – caching
+// getDailyCandles – in-memory cache
 // ---------------------------------------------------------------------------
 
 describe('StockService.getDailyCandles – in-memory cache', () => {
@@ -186,7 +176,7 @@ describe('StockService.getDailyCandles – in-memory cache', () => {
 			});
 		};
 
-		const service = new StockService({ apiKey: 'key', fetch: countingFetch });
+		const service = makeService(countingFetch);
 		await service.getDailyCandles('AAPL');
 		await service.getDailyCandles('AAPL');
 		await service.getDailyCandles('AAPL');
@@ -205,7 +195,7 @@ describe('StockService.getDailyCandles – in-memory cache', () => {
 			});
 		};
 
-		const service = new StockService({ apiKey: 'key', fetch: countingFetch });
+		const service = makeService(countingFetch);
 		await service.getDailyCandles('AAPL');
 		await service.getDailyCandles('MSFT');
 		await service.getDailyCandles('AAPL'); // cache hit
@@ -215,8 +205,37 @@ describe('StockService.getDailyCandles – in-memory cache', () => {
 
 	test('date range filtering applies to cached data without re-fetching', async () => {
 		let callCount = 0;
+		const service = makeService(async () => {
+			callCount++;
+			return new Response(JSON.stringify(buildDailyResponse('AAPL', TEST_DATES)), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' },
+			});
+		});
+
+		await service.getDailyCandles('AAPL');
+		const filtered = await service.getDailyCandles('AAPL', { startDate: '2024-01-04' });
+
+		expect(callCount).toBe(1);
+		expect(filtered.length).toBe(2);
+	});
+
+	test('cache returns a shallow copy – caller mutations do not corrupt the cache', async () => {
+		const service = makeService(mockFetch(buildDailyResponse('AAPL', TEST_DATES)));
+
+		const first = await service.getDailyCandles('AAPL');
+		first.splice(0, first.length); // mutate: clear the returned array
+
+		const second = await service.getDailyCandles('AAPL');
+		expect(second.length).toBe(4); // cache should be unaffected
+	});
+
+	test('expired cache entry triggers a new fetch', async () => {
+		let callCount = 0;
 		const service = new StockService({
 			apiKey: 'key',
+			cleanupIntervalMs: 0,
+			ttlMs: 1, // expire after 1 ms
 			fetch: async () => {
 				callCount++;
 				return new Response(JSON.stringify(buildDailyResponse('AAPL', TEST_DATES)), {
@@ -227,10 +246,46 @@ describe('StockService.getDailyCandles – in-memory cache', () => {
 		});
 
 		await service.getDailyCandles('AAPL');
-		const filtered = await service.getDailyCandles('AAPL', { startDate: '2024-01-04' });
+		// Advance time past the TTL using Date.now override
+		const origNow = Date.now;
+		Date.now = () => origNow() + 100; // well past 1 ms TTL
+		try {
+			await service.getDailyCandles('AAPL');
+		} finally {
+			Date.now = origNow;
+		}
+
+		expect(callCount).toBe(2);
+	});
+
+	test('concurrent calls for the same symbol deduplicate to a single fetch', async () => {
+		let callCount = 0;
+		// Use a slow fetch to ensure concurrency overlaps
+		const slowFetch: typeof globalThis.fetch = () =>
+			new Promise((resolve) =>
+				setTimeout(() => {
+					callCount++;
+					resolve(
+						new Response(JSON.stringify(buildDailyResponse('AAPL', TEST_DATES)), {
+							status: 200,
+							headers: { 'Content-Type': 'application/json' },
+						}),
+					);
+				}, 10),
+			);
+
+		const service = makeService(slowFetch);
+		// Fire three concurrent calls – only one outbound request should be made
+		const [a, b, c] = await Promise.all([
+			service.getDailyCandles('AAPL'),
+			service.getDailyCandles('AAPL'),
+			service.getDailyCandles('AAPL'),
+		]);
 
 		expect(callCount).toBe(1);
-		expect(filtered.length).toBe(2);
+		expect(a!.length).toBe(4);
+		expect(b!.length).toBe(4);
+		expect(c!.length).toBe(4);
 	});
 });
 
@@ -240,79 +295,88 @@ describe('StockService.getDailyCandles – in-memory cache', () => {
 
 describe('StockService.getDailyCandles – API error handling', () => {
 	test('throws StockError RATE_LIMITED when response body contains "Note" field', async () => {
-		const service = new StockService({
-			apiKey: 'key',
-			fetch: mockFetch({
+		const service = makeService(
+			mockFetch({
 				Note: 'Thank you for using Alpha Vantage! Standard API rate limit is 5 req/min.',
 			}),
-		});
+		);
 
-		try {
-			await service.getDailyCandles('AAPL');
-			expect(true).toBe(false);
-		} catch (e) {
-			expect(e).toBeInstanceOf(StockError);
-			if (e instanceof StockError) {
-				expect(e.code).toBe('RATE_LIMITED');
-				expect(e.statusCode).toBe(429);
-			}
-		}
+		await expect(service.getDailyCandles('AAPL')).rejects.toMatchObject({
+			code: 'RATE_LIMITED',
+			statusCode: 429,
+		});
 	});
 
-	test('throws StockError API_ERROR when response body contains "Information" field', async () => {
-		const service = new StockService({
-			apiKey: 'key',
-			fetch: mockFetch({ Information: 'Invalid API key. Please claim your free API key.' }),
-		});
+	test('throws StockError RATE_LIMITED when Information field signals daily quota exhaustion', async () => {
+		const service = makeService(
+			mockFetch({
+				Information:
+					'Thank you for using Alpha Vantage! Our standard API rate limit is 25 requests per day.',
+			}),
+		);
 
-		try {
-			await service.getDailyCandles('AAPL');
-			expect(true).toBe(false);
-		} catch (e) {
-			expect(e).toBeInstanceOf(StockError);
-			if (e instanceof StockError) {
-				expect(e.code).toBe('API_ERROR');
-				expect(e.statusCode).toBe(403);
-			}
-		}
+		await expect(service.getDailyCandles('AAPL')).rejects.toMatchObject({
+			code: 'RATE_LIMITED',
+			statusCode: 429,
+		});
+	});
+
+	test('throws StockError API_ERROR when Information field signals an invalid API key', async () => {
+		const service = makeService(
+			mockFetch({ Information: 'Invalid API key. Please claim your free API key.' }),
+		);
+
+		await expect(service.getDailyCandles('AAPL')).rejects.toMatchObject({
+			code: 'API_ERROR',
+			statusCode: 403,
+		});
 	});
 
 	test('throws StockError NO_DATA for an invalid ticker symbol', async () => {
-		const service = new StockService({
-			apiKey: 'key',
-			fetch: mockFetch({
+		const service = makeService(
+			mockFetch({
 				'Meta Data': { '2. Symbol': 'INVALID' },
 				// deliberately omits "Time Series (Daily)"
 			}),
-		});
+		);
 
-		try {
-			await service.getDailyCandles('INVALID');
-			expect(true).toBe(false);
-		} catch (e) {
-			expect(e).toBeInstanceOf(StockError);
-			if (e instanceof StockError) {
-				expect(e.code).toBe('NO_DATA');
-				expect(e.statusCode).toBe(404);
-			}
-		}
+		await expect(service.getDailyCandles('INVALID')).rejects.toMatchObject({
+			code: 'NO_DATA',
+			statusCode: 404,
+		});
 	});
 
 	test('throws StockError API_ERROR when HTTP response is non-2xx', async () => {
-		const service = new StockService({
-			apiKey: 'key',
-			fetch: mockFetch('Internal Server Error', 500),
+		const service = makeService(mockFetch('Internal Server Error', 500));
+
+		await expect(service.getDailyCandles('AAPL')).rejects.toMatchObject({
+			code: 'API_ERROR',
+			statusCode: 500,
+		});
+	});
+
+	test('throws StockError API_ERROR when fetch() rejects (network failure)', async () => {
+		const service = makeService(async () => {
+			throw new TypeError('Failed to fetch');
 		});
 
-		try {
-			await service.getDailyCandles('AAPL');
-			expect(true).toBe(false);
-		} catch (e) {
-			expect(e).toBeInstanceOf(StockError);
-			if (e instanceof StockError) {
-				expect(e.code).toBe('API_ERROR');
-				expect(e.statusCode).toBe(500);
-			}
-		}
+		await expect(service.getDailyCandles('AAPL')).rejects.toMatchObject({
+			code: 'API_ERROR',
+			statusCode: 503,
+		});
+	});
+
+	test('throws StockError API_ERROR when response body is malformed JSON', async () => {
+		const service = makeService(async () =>
+			new Response('not-valid-json{{{', {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' },
+			}),
+		);
+
+		await expect(service.getDailyCandles('AAPL')).rejects.toMatchObject({
+			code: 'API_ERROR',
+			statusCode: 502,
+		});
 	});
 });
