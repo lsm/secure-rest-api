@@ -112,12 +112,13 @@ describe("rsiSignal – overbought / oversold detection", () => {
     expect(rsiSignal(69)).toBe("neutral");
   });
 
-  // Sanity-check using the reference dataset (RSI ≈ 56.91 and 59.97 → neutral)
-  test("reference dataset RSI values are neutral", () => {
+  // Sanity-check signal boundaries using concrete RSI values
+  test("rsiSignal boundary detection", () => {
+    // Rising dataset at index 14 is 100 → overbought
     const val14 = rsiRising[14] as number;
-    // Rising dataset: RSI at index 14 is 100 → overbought
     expect(rsiSignal(val14)).toBe("overbought");
 
+    // Reference dataset at index 14 ≈ 59.97 → neutral
     const refVal = calculateRSI(REFERENCE_PRICES)[14] as number;
     expect(rsiSignal(refVal)).toBe("neutral");
   });
@@ -159,12 +160,22 @@ describe("calculateRSI – edge cases", () => {
     expect(result[5]).not.toBeNull();
   });
 
-  test("constant prices (no change) returns RSI = 100 after seed (all gains = 0, losses = 0)", () => {
-    // When both avgGain and avgLoss are 0, avgLoss===0 branch → RSI = 100
+  test("constant prices (no change) returns null – undefined 0/0 case", () => {
+    // avgGain === 0 AND avgLoss === 0 → flat market, RSI is undefined → null
     const prices = Array.from({ length: 16 }, () => 50);
     const result = calculateRSI(prices);
     for (let i = 14; i < 16; i++) {
-      expect(result[i]).toBe(100);
+      expect(result[i]).toBeNull();
     }
+  });
+
+  test("invalid period throws RangeError", () => {
+    expect(() => calculateRSI([1, 2, 3], 0)).toThrow(RangeError);
+    expect(() => calculateRSI([1, 2, 3], -1)).toThrow(RangeError);
+    expect(() => calculateRSI([1, 2, 3], 1.5)).toThrow(RangeError);
+  });
+
+  test("rsiSignal throws TypeError for NaN input", () => {
+    expect(() => rsiSignal(NaN)).toThrow(TypeError);
   });
 });

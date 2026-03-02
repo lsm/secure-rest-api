@@ -17,6 +17,10 @@ export type RSISignal = "overbought" | "oversold" | "neutral";
  * @returns Array of same length as prices; first `period` entries are null
  */
 export function calculateRSI(prices: number[], period = 14): (number | null)[] {
+  if (!Number.isInteger(period) || period < 1) {
+    throw new RangeError(`period must be a positive integer, got ${period}`);
+  }
+
   const result: (number | null)[] = new Array(prices.length).fill(null);
 
   // Need at least period+1 prices to produce one RSI value
@@ -61,8 +65,9 @@ export function calculateRSI(prices: number[], period = 14): (number | null)[] {
   return result;
 }
 
-function rsiFromAvgs(avgGain: number, avgLoss: number): number {
-  if (avgLoss === 0) return 100;
+function rsiFromAvgs(avgGain: number, avgLoss: number): number | null {
+  if (avgGain === 0 && avgLoss === 0) return null; // flat market — undefined (0/0)
+  if (avgLoss === 0) return 100;                   // pure up-trend
   const rs = avgGain / avgLoss;
   return 100 - 100 / (1 + rs);
 }
@@ -74,6 +79,9 @@ function rsiFromAvgs(avgGain: number, avgLoss: number): number {
  * @returns "overbought" if ≥70, "oversold" if ≤30, otherwise "neutral"
  */
 export function rsiSignal(value: number): RSISignal {
+  if (typeof value !== "number" || isNaN(value)) {
+    throw new TypeError(`rsiSignal expects a finite number, got ${value}`);
+  }
   if (value >= 70) return "overbought";
   if (value <= 30) return "oversold";
   return "neutral";
