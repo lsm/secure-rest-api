@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock RSI Viewer</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-e6nUZLBkQ86NJ6TVVKAeSaK8jWa3NhkYWZFomE39AvDbQWeie9PlQqM3pmYW5d1g" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #f8fafc;
+      letter-spacing: -0.5px;
+    }
+    h1 span { color: #38bdf8; }
+    .search-bar {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .search-bar input {
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: #f8fafc;
+      font-size: 1rem;
+      width: 200px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-bar input:focus { border-color: #38bdf8; }
+    .search-bar button {
+      padding: 0.6rem 1.4rem;
+      border-radius: 8px;
+      border: none;
+      background: #0284c7;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .search-bar button:hover:not(:disabled) { background: #0369a1; }
+    .search-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error {
+      max-width: 640px;
+      margin: 0 auto 1.5rem;
+      padding: 0.8rem 1rem;
+      border-radius: 8px;
+      background: #450a0a;
+      border: 1px solid #7f1d1d;
+      color: #fca5a5;
+      font-size: 0.9rem;
+    }
+    .charts {
+      max-width: 900px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .chart-card {
+      background: #1e293b;
+      border-radius: 12px;
+      padding: 1.2rem;
+      border: 1px solid #334155;
+    }
+    .chart-card h2 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 1rem;
+    }
+    .chart-card canvas { max-height: 280px; }
+    .legend {
+      display: flex;
+      gap: 1rem;
+      margin-top: 0.6rem;
+      font-size: 0.78rem;
+      color: #64748b;
+    }
+    .legend span { display: flex; align-items: center; gap: 0.3rem; }
+    .legend i {
+      display: inline-block;
+      width: 20px;
+      height: 3px;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Stock <span>RSI</span> Viewer</h1>
+  </header>
+
+  <div class="search-bar">
+    <input id="ticker" type="text" placeholder="Ticker (e.g. AAPL)" autocomplete="off" />
+    <button id="search-btn">Search</button>
+  </div>
+
+  <div id="error" class="error" style="display:none;"></div>
+
+  <div id="charts" class="charts" style="display:none;">
+    <div class="chart-card">
+      <h2 id="price-title">Price (Daily Close)</h2>
+      <canvas id="price-chart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>RSI (14)</h2>
+      <canvas id="rsi-chart"></canvas>
+      <div class="legend">
+        <span><i style="background:#f59e0b;"></i>RSI</span>
+        <span><i style="border-top: 2px dashed #ef4444; background:transparent;"></i>Overbought (70)</span>
+        <span><i style="border-top: 2px dashed #22c55e; background:transparent;"></i>Oversold (30)</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let priceChart = null;
+    let rsiChart = null;
+
+    const tickerInput = document.getElementById('ticker');
+    const searchBtn = document.getElementById('search-btn');
+    const errorDiv = document.getElementById('error');
+    const chartsDiv = document.getElementById('charts');
+
+    async function loadStock(symbol) {
+      searchBtn.disabled = true;
+      errorDiv.style.display = 'none';
+      chartsDiv.style.display = 'none';
+
+      try {
+        const res = await fetch(`/api/stock/${encodeURIComponent(symbol.trim().toUpperCase())}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+
+        renderCharts(data);
+      } catch (err) {
+        errorDiv.textContent = err.message || 'Failed to load stock data.';
+        errorDiv.style.display = 'block';
+      } finally {
+        searchBtn.disabled = false;
+      }
+    }
+
+    function renderCharts(data) {
+      const labels = data.dates;
+      document.getElementById('price-title').textContent = `${data.symbol} — Daily Close Price`;
+
+      if (priceChart) priceChart.destroy();
+      if (rsiChart) rsiChart.destroy();
+
+      const chartDefaults = {
+        responsive: true,
+        animation: { duration: 300 },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: {
+            ticks: { color: '#64748b', maxTicksLimit: 8, maxRotation: 0 },
+            grid: { color: '#1e293b' },
+          },
+        },
+      };
+
+      priceChart = new Chart(document.getElementById('price-chart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            data: data.closes,
+            borderColor: '#38bdf8',
+            backgroundColor: 'rgba(56,189,248,0.08)',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.3,
+            fill: true,
+          }],
+        },
+        options: {
+          ...chartDefaults,
+          scales: {
+            ...chartDefaults.scales,
+            y: {
+              ticks: { color: '#64748b' },
+              grid: { color: '#334155' },
+            },
+          },
+        },
+      });
+
+      rsiChart = new Chart(document.getElementById('rsi-chart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'RSI',
+              data: data.rsi,
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245,158,11,0.08)',
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.3,
+              fill: false,
+            },
+            {
+              label: 'Overbought (70)',
+              data: labels.map(() => 70),
+              borderColor: '#ef4444',
+              borderWidth: 1,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              fill: false,
+            },
+            {
+              label: 'Oversold (30)',
+              data: labels.map(() => 30),
+              borderColor: '#22c55e',
+              borderWidth: 1,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              fill: false,
+            },
+          ],
+        },
+        options: {
+          ...chartDefaults,
+          plugins: {
+            legend: { display: false },
+          },
+          scales: {
+            ...chartDefaults.scales,
+            y: {
+              min: 0,
+              max: 100,
+              ticks: { color: '#64748b', stepSize: 10 },
+              grid: { color: '#334155' },
+            },
+          },
+        },
+      });
+
+      chartsDiv.style.display = 'flex';
+    }
+
+    searchBtn.addEventListener('click', () => {
+      const sym = tickerInput.value.trim();
+      if (sym) loadStock(sym);
+    });
+
+    tickerInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const sym = tickerInput.value.trim();
+        if (sym) loadStock(sym);
+      }
+    });
+  </script>
+</body>
+</html>
